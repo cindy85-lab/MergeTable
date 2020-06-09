@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 import logging
 from collections import OrderedDict
+from upload import DatabaseAccess
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--db", dest="dburl", help="mysql database url. mysql:\\username:password@hostname",required=True)
@@ -143,7 +144,22 @@ def Merge(dbdata,outputfile):
         logger.error("Open File %s failed" % output_path)
     return 0
 
+def insert_jcloud_mergetable_vm(dataset):
+    nowdate = datetime.now()
+    today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day) + " " + str(nowdate.hour) + ":00"
+    user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb,timestamp = "jcloud_agri","jcloud_agri_project","6a8fa1a6-882f-4691-a4a5-fa69f1eaa177","农生院智能办公系统","active",4,16384,today
+    db=DatabaseAccess()
+    
+    sql = "select max(TIMESTAMP) from testdb_CJ.jcloud_mergetable_vm"
+    if (datetime.strptime(today,'%Y-%m-%d %H:%M') != db.getData(sql)[0][0][0]):
+        db.insertDataSet(dataset)
+    sql = "SELECT * FROM `testdb_CJ`.`jcloud_mergetable_vm` LIMIT 1000;"
+    print(db.getData(sql))
+    
 if __name__ == "__main__":
+    test_insert()
+
+if __name__ == "__main__1":
     #csv_data = RetriveDataFromCsv()
     db_data_1 = RetrieveDataFromMysql(sql_vm)
     outputfile_1 = opt.outputfile + "_vm.csv"
