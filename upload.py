@@ -38,8 +38,8 @@ class DatabaseAccess():
             self.__db.close()
         return (data,field_names)
 
-    def insertData(self,user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb, timestamp):
-        sql = "insert into testdb_CJ.jcloud_mergetable_vm values ('%s','%s','%s','%s','%s',%d,%d,'%s')" % (user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb,timestamp)
+    def insertData(self,tablename, user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb, timestamp):
+        sql = "insert into testdb_CJ.jcloud_%s values ('%s','%s','%s','%s','%s',%d,%d,'%s')" % (tablename, user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb,timestamp)
         try:
             self.isConnectionOpen()
             with self.__db.cursor() as cursor:
@@ -50,12 +50,13 @@ class DatabaseAccess():
             self.__db.rollback()
         finally:
             self.__db.close()
-    def insertDataSet(self,dataset,current_time):
+    def insertDataSet(self,tablename, dataset,current_time):
+        tbname = "testdb_CJ.jcloud_%s" % tablename
         try:
             self.isConnectionOpen()
             with self.__db.cursor() as cursor:
                 for user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb in dataset:
-                    sql = "insert into testdb_CJ.jcloud_mergetable_vm values ('%s','%s','%s','%s','%s',%d,%d,'%s')" % (user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb,current_time)
+                    sql = "insert into %s values ('%s','%s','%s','%s','%s',%d,%d,'%s')" % (tbname,user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb,current_time)
                     cursor.execute(sql)
                 self.__db.commit()
         except Exception as e:

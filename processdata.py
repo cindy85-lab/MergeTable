@@ -112,7 +112,8 @@ def RetriveDataFromCsv():
 def Merge(dbdata,outputfile):
    # csv_data, csv_header = csvdata
     db_data, db_header = dbdata
-    output_path = os.path.abspath(outputfile)
+    output_path = os.path.abspath(outputfile+".csv")
+    tablename = os.path.basename(outputfile)
     try:
         with open(output_path,"r",encoding='utf-8-sig') as fr:
             content = [item for item in csv.reader(fr) if item]
@@ -123,8 +124,8 @@ def Merge(dbdata,outputfile):
         else:
             content = []
     nowdate = datetime.now()
-    #today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day) + " " + str(nowdate.hour) + ":00"
-    today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day)
+    today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day) + " " + str(nowdate.hour) + ":00"
+    #today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day)
     merge_data = [[item for item in row] for row in db_data]
     if not merge_data:
         logger.warning("No data retrieved from query %s." % outputfile.split("_")[-1].split(".")[0])
@@ -135,6 +136,7 @@ def Merge(dbdata,outputfile):
     #    logger.info("Data has been collected for %s in this hour." % output_path)
    #     return 0
     content.extend(merge_data)
+    insert_jcloud_mergetable(tablename,merge_data)
     try:
         with open(output_path,"w",encoding='utf-8-sig',newline="") as fw:
             csv_writer = csv.writer(fw)
@@ -144,16 +146,16 @@ def Merge(dbdata,outputfile):
         logger.error("Open File %s failed" % output_path)
     return 0
 
-def insert_jcloud_mergetable_vm(dataset):
+def insert_jcloud_mergetable(tablename,dataset):
     nowdate = datetime.now()
     today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day) + " " + str(nowdate.hour) + ":00"
     user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb,timestamp = "jcloud_agri","jcloud_agri_project","6a8fa1a6-882f-4691-a4a5-fa69f1eaa177","农生院智能办公系统","active",4,16384,today
     db=DatabaseAccess()
     
-    sql = "select max(TIMESTAMP) from testdb_CJ.jcloud_mergetable_vm"
+    sql = "select max(TIMESTAMP) from testdb_CJ.jcloud_%s" % tablename
     if (datetime.strptime(today,'%Y-%m-%d %H:%M') != db.getData(sql)[0][0][0]):
-        db.insertDataSet(dataset)
-    sql = "SELECT * FROM `testdb_CJ`.`jcloud_mergetable_vm` LIMIT 1000;"
+        db.insertDataSet(tablename, dataset,today)
+    sql = "SELECT * FROM `testdb_CJ`.`jcloud_%s` LIMIT 1000;" % tablename
     print(db.getData(sql))
     
 if __name__ == "__main__":
@@ -162,17 +164,17 @@ if __name__ == "__main__":
 if __name__ == "__main__1":
     #csv_data = RetriveDataFromCsv()
     db_data_1 = RetrieveDataFromMysql(sql_vm)
-    outputfile_1 = opt.outputfile + "_vm.csv"
+    outputfile_1 = opt.outputfile + "_vm"
     Merge(db_data_1,outputfile_1)
     
-    outputfile_2 = opt.outputfile + "_storage.csv"
+    outputfile_2 = opt.outputfile + "_storage"
     db_data_2 = RetrieveDataFromMysql(sql_storage)
     Merge(db_data_2,outputfile_2)
     
-    outputfile_3 = opt.outputfile + "_backup.csv"
+    outputfile_3 = opt.outputfile + "_backup"
     db_data_3 = RetrieveDataFromMysql(sql_backup)
     Merge(db_data_3,outputfile_3)
     
-    outputfile_4 = opt.outputfile + "_snapshot.csv"
+    outputfile_4 = opt.outputfile + "_snapshot"
     db_data_4 = RetrieveDataFromMysql(sql_snapshot)
     Merge(db_data_4,outputfile_4)
