@@ -6,7 +6,8 @@ import os
 from datetime import datetime
 import logging
 from collections import OrderedDict
-from upload import DatabaseAccess
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--db", dest="dburl", help="mysql database url. mysql:\\username:password@hostname",required=True)
@@ -31,7 +32,7 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 sql_vm = '''
-    SELECT * FROM (SELECT e.user_account, f.name as project_name, e.vm_uuid, e.vm_name, e.vm_state, e.vcpus, e.memory_mb FROM (select c.*, d.user_account from (select a.* ,b.payer_id from (select nova.instances.uuid as vm_uuid, nova.instances.display_name as vm_name, nova.instances.vm_state, nova.instances.vcpus, nova.instances.memory_mb, nova.instances.project_id from nova.instances where nova.instances.deleted = 0) a left join (select keystone.assignment.actor_id as payer_id ,keystone.assignment.target_id  from keystone.assignment where keystone.assignment.role_id = "22f8b7794e5f40f4a21b1c74087936ae") b on a.project_id = b.target_id ) c left join (select a.id as user_id, b.name as user_account  from keystone.user a left join keystone.local_user b on a.id=b.user_id ) d on c.payer_id = d.user_id )e  left join keystone.project f on e.project_id=f.id )g WHERE g.user_account REGEXP 'jcloud_' ORDER BY g.user_account
+    SELECT * FROM (SELECT e.user_account, f.name as project_name, e.vm_name, e.vm_uuid, e.vm_state, e.vcpus, e.memory_mb FROM (select c.*, d.user_account from (select a.* ,b.payer_id from (select nova.instances.uuid as vm_uuid, nova.instances.display_name as vm_name, nova.instances.vm_state, nova.instances.vcpus, nova.instances.memory_mb, nova.instances.project_id from nova.instances where nova.instances.deleted = 0) a left join (select keystone.assignment.actor_id as payer_id ,keystone.assignment.target_id  from keystone.assignment where keystone.assignment.role_id = "22f8b7794e5f40f4a21b1c74087936ae") b on a.project_id = b.target_id ) c left join (select a.id as user_id, b.name as user_account  from keystone.user a left join keystone.local_user b on a.id=b.user_id ) d on c.payer_id = d.user_id )e  left join keystone.project f on e.project_id=f.id )g WHERE g.user_account REGEXP 'jcloud_' ORDER BY g.user_account
 ;
     '''
 sql_storage = '''
@@ -51,6 +52,85 @@ select g.payer_account, h.name as project_name, g.backup_name, g.backup_size_gb 
 #SELECT  * FROM keystone.local_user WHERE user_id IN (select id from keystone.user  WHERE json_value(extra,'$.consumption') > 0 and DATE_SUB(CURDATE(), INTERVAL 7 DAY) <= date(created_at));
 #'''
 
+
+# 连接设置 连接mysql 用户名ffzs 密码666 地址localhost：3306 database：stock
+class DatabaseAccess():
+	#初始化属性
+    def __init__(self):
+        self.__db_host = "10.119.1.101"
+        self.__db_port = 3306
+        self.__db_user = "user_CJ"
+        self.__db_password = "Xiejing@2019"
+        self.__db_database = "testdb_CJ"
+	#链接数据库
+    def isConnectionOpen(self):
+        try:
+            self.__db = pymysql.connect(
+                host=self.__db_host,
+                port=self.__db_port,
+                user=self.__db_user,
+                password=self.__db_password,
+                database=self.__db_database,
+                charset='utf8'
+            )
+        except Exception as e:
+            logger.error("%s : %s" % (str(e), self.__db_host))
+            exit(-1)
+    def getData(self,sql):
+        self.isConnectionOpen()
+        try:
+            with self.__db.cursor() as cursor:
+                cursor.execute(sql)
+                data = cursor.fetchall()
+                num_fields = len(cursor.description)
+                field_names = [i[0] for i in cursor.description]
+        except Exception as e:
+            logger.error("%s : %s" % (str(e), sql))
+            data,field_names = [],[]
+        finally:
+            self.__db.close()
+        return (data,field_names)
+
+    def insertData(self,tablename, user_account,project_name,vm_name,vm_state,vcpus,memory_mb, timestamp):
+        sql = "insert into testdb_CJ.jcloud_%s values ('%s','%s','%s','%s',%d,%d,'%s')" % (tablename, user_account,project_name,vm_name,vm_state,vcpus,memory_mb,timestamp)
+        try:
+            self.isConnectionOpen()
+            with self.__db.cursor() as cursor:
+                cursor.execute(sql)
+                self.__db.commit()
+        except Exception as e:
+            logger.error("%s : %s" % (str(e), sql))
+            self.__db.rollback()
+        finally:
+            self.__db.close()
+    def genSql(self,tablename, row, current_time):
+        sql = "insert into %s values (" % tablename
+        for item in row:
+            if isinstance(item,str):
+                sql += "'" + item + "',"
+            elif isinstance(item,int):
+                sql += str(item) + ","
+            else:
+                return ""
+        sql += "'" + str(current_time) + "')"
+        return sql
+    def insertDataSet(self,tablename, dataset,current_time):
+        tbname = "testdb_CJ.jcloud_%s" % tablename
+        try:
+            self.isConnectionOpen()
+            with self.__db.cursor() as cursor:
+                for rowdata in dataset:
+                    sql = self.genSql(tbname,rowdata,current_time)
+                    if sql:
+                        cursor.execute(sql)
+                self.__db.commit()
+        except Exception as e:
+            logger.error("%s : %s" % (str(e), sql))
+            self.__db.rollback()
+        finally:
+            self.__db.close()
+
+
 def RetrieveDataFromMysql(sql):
     url_rt = urlparse(opt.dburl)
     
@@ -68,8 +148,11 @@ def RetrieveDataFromMysql(sql):
         hostname = url_rt.netloc
         username = ""
         password = ""   
-
-    db = pymysql.connect(hostname,username,password)
+    try:
+        db = pymysql.connect(hostname,username,password)
+    except Exception as e:
+        logger.error("%s : %s" % (str(e), hostname))
+        exit(-1)
 
     try:
         with db.cursor() as cursor:
@@ -82,47 +165,15 @@ def RetrieveDataFromMysql(sql):
         data,field_names = [],[]
     finally:
         db.close()
+
     return (data,field_names)
 
-def RetriveDataFromCsv():
-    
-    new_user,_ = RetrieveDataFromMysql(sql_newuser)
-    csvfile = os.path.abspath(opt.csvfile)
-    try:
-        with open(csvfile,"r",encoding='utf-8-sig') as fr:
-            content = OrderedDict([(item[0].strip(),item[1].strip()) for item in csv.reader(fr)])
-    except:
-        logger.error("Open file %s failed." % csvfile)
-        exit(-1)
-    header = ["payer_classic","analyze_time"]
-    newuser = (set(new_user) - set(content.keys()))
-    if newuser:
-        for nu in newuser:
-            content[nu[3]] = '待定'
-        try:
-            with open(csvfile,"w",newline='', encoding='utf-8-sig') as fw:
-                usertypewriter = csv.writer(fw)
-                for username,usertype in content.items():
-                    usertypewriter.writerow([username,usertype])
-        except:
-            logger.error("Write file %s failed." % csvfile)
-            exit(-1)
-    return (content,header)
 
 def Merge(dbdata,outputfile):
-   # csv_data, csv_header = csvdata
+
     db_data, db_header = dbdata
-    output_path = os.path.abspath(outputfile+".csv")
     tablename = os.path.basename(outputfile)
-    try:
-        with open(output_path,"r",encoding='utf-8-sig') as fr:
-            content = [item for item in csv.reader(fr) if item]
-    except:
-        if os.path.exists(output_path):
-            logger.error("Open File %s failed" % output_path)
-            return 0
-        else:
-            content = []
+
     nowdate = datetime.now()
     today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day) + " " + str(nowdate.hour) + ":00"
     #today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day)
@@ -130,39 +181,21 @@ def Merge(dbdata,outputfile):
     if not merge_data:
         logger.warning("No data retrieved from query %s." % outputfile.split("_")[-1].split(".")[0])
         return 0
-    if not content:
-        content = [[item for item in db_header]]
-   # if content[-1][-1] == today:
-    #    logger.info("Data has been collected for %s in this hour." % output_path)
-   #     return 0
-    content.extend(merge_data)
+
     insert_jcloud_mergetable(tablename,merge_data)
-    try:
-        with open(output_path,"w",encoding='utf-8-sig',newline="") as fw:
-            csv_writer = csv.writer(fw)
-            for item in content:
-                csv_writer.writerow(item)
-    except:
-        logger.error("Open File %s failed" % output_path)
     return 0
 
 def insert_jcloud_mergetable(tablename,dataset):
     nowdate = datetime.now()
     today = str(nowdate.year) + "-" + str(nowdate.month) + "-" + str(nowdate.day) + " " + str(nowdate.hour) + ":00"
-    user_account,project_name,vm_uuid,vm_name,vm_state,vcpus,memory_mb,timestamp = "jcloud_agri","jcloud_agri_project","6a8fa1a6-882f-4691-a4a5-fa69f1eaa177","农生院智能办公系统","active",4,16384,today
+    
     db=DatabaseAccess()
     
     sql = "select max(TIMESTAMP) from testdb_CJ.jcloud_%s" % tablename
     if (datetime.strptime(today,'%Y-%m-%d %H:%M') != db.getData(sql)[0][0][0]):
         db.insertDataSet(tablename, dataset,today)
-    sql = "SELECT * FROM `testdb_CJ`.`jcloud_%s` LIMIT 1000;" % tablename
-    print(db.getData(sql))
-    
-if __name__ == "__main__":
-    test_insert()
 
-if __name__ == "__main__1":
-    #csv_data = RetriveDataFromCsv()
+if __name__ == "__main__":
     db_data_1 = RetrieveDataFromMysql(sql_vm)
     outputfile_1 = opt.outputfile + "_vm"
     Merge(db_data_1,outputfile_1)
