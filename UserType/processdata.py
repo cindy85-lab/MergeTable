@@ -79,6 +79,8 @@ def RetrieveDataFromMysql(sql):
         data,field_names = [],[]
     finally:
         db.close()
+
+    data = [item[3].strip() for item in data]
     return (data,field_names)
 
 def RetriveDataFromCsv():
@@ -96,7 +98,7 @@ def RetriveDataFromCsv():
     if newuser:
         for nu in newuser:
             print(nu)
-            content[nu[3]] = '待定'
+            content[nu] = '待定'
         try:
             with open(csvfile,"w",newline='', encoding='utf-8-sig') as fw:
                 usertypewriter = csv.writer(fw)
